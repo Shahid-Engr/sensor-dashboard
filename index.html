@@ -1,0 +1,846 @@
+<title>FieldMesh Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: control-room console. Slim header, tab strip, dense card grid; status is carried by pills, severity stripes and threshold bands. */
+:root{
+  --bg:#edf1f3; --surface:#ffffff; --surface-2:#f4f7f8; --fg:#13202a; --muted:#566874; --line:#d4dde2;
+  --accent:#0a6f86; --accent-ink:#ffffff; --accent-soft:#d6ecf1;
+  --ok:#1b7c46; --ok-soft:#daf0e2; --warn:#94600c; --warn-soft:#f7ebd0; --crit:#b4302a; --crit-soft:#f6dcd9; --idle:#64737d; --idle-soft:#e4e9ec;
+  --band:rgba(10,111,134,.09); --grid:#e2e8eb; --shadow:0 1px 2px rgba(19,32,42,.06),0 2px 8px rgba(19,32,42,.04);
+  --f-display:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0d1418; --surface:#141e24; --surface-2:#19252c; --fg:#e1e8ec; --muted:#8c9ea9; --line:#25333b;
+  --accent:#4cb2cc; --accent-ink:#06191f; --accent-soft:#12343d;
+  --ok:#4fc283; --ok-soft:#123222; --warn:#e2a948; --warn-soft:#382912; --crit:#f06b5e; --crit-soft:#3d1a17; --idle:#8c9ea9; --idle-soft:#1f2b32;
+  --band:rgba(76,178,204,.10); --grid:#1f2c33; --shadow:0 1px 2px rgba(0,0,0,.3); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0d1418; --surface:#141e24; --surface-2:#19252c; --fg:#e1e8ec; --muted:#8c9ea9; --line:#25333b;
+  --accent:#4cb2cc; --accent-ink:#06191f; --accent-soft:#12343d;
+  --ok:#4fc283; --ok-soft:#123222; --warn:#e2a948; --warn-soft:#382912; --crit:#f06b5e; --crit-soft:#3d1a17; --idle:#8c9ea9; --idle-soft:#1f2b32;
+  --band:rgba(76,178,204,.10); --grid:#1f2c33; --shadow:0 1px 2px rgba(0,0,0,.3); color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.45}
+h1,h2,h3{font-family:var(--f-display);font-weight:700;letter-spacing:.01em;margin:0;text-wrap:balance}
+h2{font-size:1.15rem}
+h3{font-size:1rem}
+.num,.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1320px;margin:0 auto;padding-inline:16px}
+
+/* header */
+.top{background:var(--surface);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding-block:12px}
+.brand{display:flex;align-items:center;gap:10px}
+.mark{width:30px;height:30px;border-radius:8px;background:var(--accent);display:grid;place-items:center}
+.mark svg{width:18px;height:18px}
+.brand b{font-family:var(--f-display);font-size:1.3rem;display:block;line-height:1}
+.brand small{color:var(--muted);font-size:.78rem;letter-spacing:.06em;text-transform:uppercase}
+.demo-pill{font-size:.78rem;font-weight:600;color:var(--warn);background:var(--warn-soft);padding:4px 10px;border-radius:99px}
+.top .spacer{flex:1}
+.clock{color:var(--muted);font-size:.85rem}
+.live{display:inline-flex;align-items:center;gap:6px;font-size:.85rem;color:var(--muted)}
+.live i{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px var(--ok-soft)}
+
+/* tabs */
+.tabs{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
+.tabs .wrap{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
+.tab{background:none;border:0;border-bottom:2px solid transparent;padding:11px 14px;cursor:pointer;color:var(--muted);font-weight:600;white-space:nowrap;display:flex;gap:6px;align-items:center}
+.tab:hover{color:var(--fg)}
+.tab[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
+.count{font-family:var(--f-mono);font-size:.72rem;min-width:20px;padding:1px 6px;border-radius:99px;background:var(--crit);color:var(--surface);text-align:center}
+.count[data-zero]{background:var(--idle-soft);color:var(--muted)}
+
+main{padding-block:20px 48px}
+section.view{display:grid;gap:16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);min-width:0}
+.card-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:14px 16px 0}
+.card-h .sub{color:var(--muted);font-size:.85rem}
+.card-h .grow{flex:1}
+.card-b{padding:14px 16px 16px}
+.lead{color:var(--muted);margin:0;max-width:70ch}
+
+/* KPIs */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.kpi{padding:14px 16px}
+.kpi .lbl{font-size:.75rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.kpi .val{font-family:var(--f-display);font-size:2rem;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums;margin-top:4px}
+.kpi .val small{font-size:1rem;color:var(--muted);font-weight:600}
+.kpi .note{font-size:.82rem;color:var(--muted)}
+.kpi.alarm .val{color:var(--crit)}
+
+.grid-ov{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:16px}
+.grid-2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+@media (max-width:920px){.grid-ov,.grid-2{grid-template-columns:minmax(0,1fr)}}
+
+.chart-box{position:relative;height:280px}
+.chart-box canvas{width:100%;height:100%;display:block}
+.chart-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:.82rem;color:var(--muted);padding:0 16px 14px}
+.chart-legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:14px;height:3px;border-radius:2px;background:var(--accent);display:inline-block}
+.sw.band{height:10px;background:var(--band);border:1px dashed var(--crit)}
+.sw.dot{width:8px;height:8px;border-radius:50%;background:var(--crit)}
+.readout{display:flex;gap:18px;flex-wrap:wrap;align-items:baseline;padding:10px 16px 0}
+.readout .big{font-family:var(--f-display);font-size:1.9rem;font-weight:700;font-variant-numeric:tabular-nums}
+.readout .meta{color:var(--muted);font-size:.85rem}
+
+select.ctl,input.ctl{background:var(--surface-2);border:1px solid var(--line);border-radius:7px;padding:6px 9px;min-width:0}
+input.ctl.num{width:6.5em}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:7px;padding:6px 12px;cursor:pointer;font-weight:600;font-size:.88rem}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.08);color:var(--accent-ink)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.sm{padding:4px 9px;font-size:.8rem}
+
+/* alarms */
+.alarms{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.alarm-i{display:grid;grid-template-columns:4px minmax(0,1fr) auto;gap:10px;align-items:center;background:var(--surface-2);border-radius:8px;padding:8px 10px 8px 0;overflow:hidden}
+.alarm-i .stripe{align-self:stretch;background:var(--crit)}
+.alarm-i.warn .stripe{background:var(--warn)}
+.alarm-i.acked{opacity:.6}
+.alarm-i b{display:block;font-weight:600}
+.alarm-i span{font-size:.84rem;color:var(--muted)}
+.empty{color:var(--muted);font-size:.9rem;padding:8px 0}
+
+.log{list-style:none;margin:0;padding:0;font-size:.88rem;max-height:300px;overflow:auto}
+.log li{display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:10px;padding:7px 0;border-top:1px solid var(--line);align-items:baseline}
+.log li:first-child{border-top:0}
+.log time{color:var(--muted);font-family:var(--f-mono);font-size:.78rem}
+
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:.76rem;font-weight:600;padding:2px 8px;border-radius:99px;white-space:nowrap}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.pill.online,.pill.ok{color:var(--ok);background:var(--ok-soft)}
+.pill.offline{color:var(--idle);background:var(--idle-soft)}
+.pill.joining,.pill.updating,.pill.warn{color:var(--warn);background:var(--warn-soft)}
+.pill.high,.pill.low,.pill.crit{color:var(--crit);background:var(--crit-soft)}
+.tag{font-size:.72rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);border:1px solid var(--line);border-radius:5px;padding:1px 6px;white-space:nowrap}
+.tag.lora{color:var(--accent);border-color:var(--accent-soft);background:var(--accent-soft)}
+
+/* gateways */
+.gws{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.gw{padding:14px 16px;display:grid;gap:8px}
+.gw-top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.gw-top b{display:block;font-weight:600}
+.gw-top small{color:var(--muted);font-size:.8rem}
+.kv{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.kv div{display:grid}
+.kv dt{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.kv dd{margin:0;font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-size:.95rem}
+
+/* tables */
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.9rem}
+th{text-align:left;font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:middle;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td .name{font-weight:600}
+td .id{color:var(--muted);font-family:var(--f-mono);font-size:.78rem}
+td.right,th.right{text-align:right}
+.reading{display:flex;align-items:center;gap:10px}
+.reading canvas{width:96px;height:28px;display:block}
+.reading .num{min-width:7.5em}
+.batt{display:inline-flex;align-items:center;gap:6px}
+.batt i{width:28px;height:10px;border:1px solid var(--muted);border-radius:2px;position:relative;display:inline-block}
+.batt i::after{content:"";position:absolute;inset:1px auto 1px 1px;width:var(--p);background:var(--ok);border-radius:1px}
+.batt.low i::after{background:var(--crit)}
+.actions{display:flex;gap:6px}
+
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:4px 12px;font-size:.84rem;font-weight:600;cursor:pointer;color:var(--muted)}
+.chip[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);border-color:var(--accent-soft)}
+
+/* forms */
+details.add{border-top:1px solid var(--line)}
+details.add summary{cursor:pointer;padding:12px 16px;font-weight:600;color:var(--accent);list-style:none}
+details.add summary::-webkit-details-marker{display:none}
+details.add summary::before{content:"+ "}
+details.add[open] summary::before{content:"– "}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;padding:0 16px 16px;align-items:end}
+.field{display:grid;gap:4px;min-width:0}
+.field label{font-size:.78rem;color:var(--muted);font-weight:600}
+.field .ctl{width:100%}
+.hint{font-size:.82rem;color:var(--muted);grid-column:1/-1;margin:0}
+
+.toggle{position:relative;width:38px;height:22px;display:inline-block}
+.toggle input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.toggle span{position:absolute;inset:0;border-radius:99px;background:var(--idle-soft);border:1px solid var(--line);transition:background .15s}
+.toggle span::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--surface);box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s}
+.toggle input:checked+span{background:var(--accent);border-color:var(--accent)}
+.toggle input:checked+span::after{transform:translateX(16px)}
+.toggle input:focus-visible+span{outline:2px solid var(--accent);outline-offset:2px}
+
+.rules{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.rule{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;background:var(--surface-2);border-radius:8px;padding:10px 12px}
+.rule p{margin:0;white-space:normal}
+.rule .kw{font-family:var(--f-mono);font-size:.8rem;color:var(--accent);font-weight:500}
+.rule small{color:var(--muted);display:block;font-size:.8rem}
+
+/* camera */
+.cams{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.cam{overflow:hidden}
+.cam canvas{width:100%;aspect-ratio:16/9;max-width:100%;display:block;background:#0b1013}
+.cam-f{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 14px;flex-wrap:wrap}
+.cam-f b{font-weight:600}
+.cam-f small{color:var(--muted)}
+
+pre.json{margin:0;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow:auto;font-family:var(--f-mono);font-size:.8rem;line-height:1.55;max-height:360px}
+.ep{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.ep li{display:grid;grid-template-columns:4.2em minmax(0,1fr);gap:10px;align-items:baseline;font-size:.88rem}
+.ep .m{font-family:var(--f-mono);font-size:.74rem;font-weight:600;color:var(--accent)}
+.ep code{font-family:var(--f-mono);font-size:.82rem;word-break:break-all}
+.ep span{grid-column:2;color:var(--muted);font-size:.82rem;margin-top:-4px}
+
+/* panel */
+.scrim{position:fixed;inset:0;background:rgba(5,12,16,.4);z-index:20}
+.panel{position:fixed;top:0;right:0;bottom:0;width:min(440px,100%);background:var(--surface);border-left:1px solid var(--line);z-index:21;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.panel-h{display:flex;align-items:flex-start;gap:10px;padding:16px;border-bottom:1px solid var(--line)}
+.panel-h div{flex:1;min-width:0}
+.panel-b{padding:16px;overflow:auto;display:grid;gap:18px;align-content:start}
+.panel-b section{display:grid;gap:10px}
+.note{font-size:.84rem;color:var(--muted);margin:0;background:var(--surface-2);border-radius:8px;padding:8px 10px}
+.bar{height:8px;border-radius:99px;background:var(--idle-soft);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);width:0;transition:width .4s}
+.x{background:none;border:0;font-size:1.4rem;line-height:1;cursor:pointer;color:var(--muted);padding:2px 6px}
+
+.toasts{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:30;display:grid;gap:8px;width:min(420px,calc(100% - 32px))}
+.toast{background:var(--fg);color:var(--bg);padding:10px 14px;border-radius:8px;font-size:.9rem;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand">
+      <span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="var(--accent-ink)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="2.2" fill="var(--accent-ink)"/><path d="M7.5 7.5a6.4 6.4 0 0 0 0 9M16.5 7.5a6.4 6.4 0 0 1 0 9M4.6 4.6a10.5 10.5 0 0 0 0 14.8M19.4 4.6a10.5 10.5 0 0 1 0 14.8"/></svg></span>
+      <div><b>FieldMesh</b><small>IoT console</small></div>
+    </div>
+    <span class="demo-pill" title="Readings arrive every 2 seconds so changes are easy to see">Demo · simulated data</span>
+    <span class="spacer"></span>
+    <span class="live"><i></i>Live</span>
+    <span class="clock mono" id="clock"></span>
+  </div>
+</header>
+
+<nav class="tabs" aria-label="Sections">
+  <div class="wrap" role="tablist">
+    <button class="tab" role="tab" data-tab="overview" aria-selected="true">Overview <span class="count" id="cnt-alarms">0</span></button>
+    <button class="tab" role="tab" data-tab="devices" aria-selected="false">Devices</button>
+    <button class="tab" role="tab" data-tab="rules" aria-selected="false">Thresholds &amp; rules</button>
+    <button class="tab" role="tab" data-tab="camera" aria-selected="false">Camera AI</button>
+    <button class="tab" role="tab" data-tab="api" aria-selected="false">API</button>
+  </div>
+</nav>
+
+<main class="wrap">
+
+  <!-- OVERVIEW -->
+  <section class="view" id="tab-overview">
+    <div class="kpis">
+      <div class="card kpi"><div class="lbl">Devices online</div><div class="val" id="k-online">–</div><div class="note" id="k-online-n"></div></div>
+      <div class="card kpi alarm"><div class="lbl">Active alarms</div><div class="val" id="k-alarms">–</div><div class="note" id="k-alarms-n"></div></div>
+      <div class="card kpi"><div class="lbl">Messages per minute</div><div class="val" id="k-msgs">–</div><div class="note">Wi-Fi + LoRaWAN uplinks</div></div>
+      <div class="card kpi"><div class="lbl">Camera events today</div><div class="val" id="k-cam">–</div><div class="note">From the on-site AI box</div></div>
+    </div>
+
+    <div class="grid-ov">
+      <div class="card">
+        <div class="card-h">
+          <h2>Live trend</h2>
+          <span class="grow"></span>
+          <label class="sub" for="mainDev">Sensor</label>
+          <select class="ctl" id="mainDev"></select>
+        </div>
+        <div class="readout"><span class="big" id="ro-val">–</span><span class="pill" id="ro-state"></span><span class="meta" id="ro-meta"></span></div>
+        <div class="card-b"><div class="chart-box"><canvas id="mainChart" aria-label="Live trend chart"></canvas></div></div>
+        <div class="chart-legend"><span><i class="sw"></i>Reading</span><span><i class="sw band"></i>Allowed range (low to high limit)</span><span><i class="sw dot"></i>Outside limits</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-h"><h2>Active alarms</h2><span class="grow"></span><span class="sub" id="al-sub"></span></div>
+        <div class="card-b"><ul class="alarms" id="alarmList"></ul></div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-h"><h2>Gateways</h2></div>
+        <div class="card-b"><div class="gws" id="gwList"></div></div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h2>Event log</h2><span class="sub">Alarms, rule actions and device changes</span></div>
+        <div class="card-b"><ul class="log" id="eventLog"></ul></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DEVICES -->
+  <section class="view" id="tab-devices" hidden>
+    <div class="card">
+      <div class="card-h">
+        <h2>All devices</h2><span class="sub" id="dev-sub"></span><span class="grow"></span>
+        <div class="chips" id="devFilter">
+          <button class="chip" data-f="all" aria-pressed="true">All</button>
+          <button class="chip" data-f="wifi" aria-pressed="false">Wi-Fi</button>
+          <button class="chip" data-f="lora" aria-pressed="false">LoRaWAN</button>
+          <button class="chip" data-f="gateway" aria-pressed="false">Gateways</button>
+          <button class="chip" data-f="camera" aria-pressed="false">Cameras</button>
+        </div>
+      </div>
+      <div class="card-b tbl-wrap">
+        <table>
+          <thead><tr><th>Device</th><th>Network</th><th>Site</th><th>Status</th><th>Latest reading</th><th>Signal</th><th>Battery</th><th>Firmware</th><th class="right">Actions</th></tr></thead>
+          <tbody id="devBody"></tbody>
+        </table>
+      </div>
+      <details class="add" id="addBox">
+        <summary>Add a device</summary>
+        <form class="form" id="addForm" novalidate>
+          <div class="field"><label for="nd-net">Connection</label>
+            <select class="ctl" id="nd-net"><option value="wifi">Wi-Fi sensor</option><option value="lora">LoRaWAN sensor</option></select></div>
+          <div class="field"><label for="nd-name">Name</label><input class="ctl" id="nd-name" placeholder="e.g. Cold room 2" required></div>
+          <div class="field"><label for="nd-site">Site</label>
+            <select class="ctl" id="nd-site"><option>Main building</option><option>Warehouse</option><option>Greenhouse</option><option>Field A</option><option>Field B</option></select></div>
+          <div class="field"><label for="nd-metric">Measures</label>
+            <select class="ctl" id="nd-metric"><option value="temp">Temperature</option><option value="hum">Humidity</option><option value="co2">CO₂</option><option value="soil">Soil moisture</option></select></div>
+          <div class="field"><label for="nd-hw" id="nd-hw-l">MAC address</label><input class="ctl mono" id="nd-hw"></div>
+          <div class="field" id="nd-key-f" hidden><label for="nd-key">AppKey (generated)</label><input class="ctl mono" id="nd-key" readonly></div>
+          <button class="btn primary" type="submit">Add device</button>
+          <p class="hint" id="nd-hint">The device connects over Wi-Fi with its own certificate and starts sending readings over MQTT.</p>
+        </form>
+      </details>
+    </div>
+  </section>
+
+  <!-- RULES -->
+  <section class="view" id="tab-rules" hidden>
+    <div class="card">
+      <div class="card-h"><h2>Threshold limits</h2><span class="sub">Change a limit and the alarm check uses it on the next reading.</span></div>
+      <div class="card-b tbl-wrap">
+        <table>
+          <thead><tr><th>Sensor</th><th>Measures</th><th class="right">Now</th><th>Low limit</th><th>High limit</th><th>Alarm</th><th>Status</th></tr></thead>
+          <tbody id="thBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-h"><h2>Automation rules</h2></div>
+        <div class="card-b"><ul class="rules" id="ruleList"></ul></div>
+        <details class="add" id="ruleBox">
+          <summary>Add a rule</summary>
+          <form class="form" id="ruleForm" novalidate>
+            <div class="field"><label for="r-dev">When sensor</label><select class="ctl" id="r-dev"></select></div>
+            <div class="field"><label for="r-op">Is</label><select class="ctl" id="r-op"><option value=">">above</option><option value="<">below</option></select></div>
+            <div class="field"><label for="r-val">Value</label><input class="ctl mono" id="r-val" type="number" step="any" required></div>
+            <div class="field"><label for="r-n">For readings in a row</label><input class="ctl mono" id="r-n" type="number" min="1" max="20" value="2"></div>
+            <div class="field"><label for="r-act">Then</label>
+              <select class="ctl" id="r-act"><option>Send SMS to on-call</option><option>Send email to site manager</option><option>Switch relay 1 on</option><option>Open irrigation valve</option><option>Run ventilation fan at 100%</option></select></div>
+            <button class="btn primary" type="submit">Add rule</button>
+          </form>
+        </details>
+      </div>
+      <div class="card">
+        <div class="card-h"><h2>Rule activity</h2><span class="sub">Actions the rules have taken</span></div>
+        <div class="card-b"><ul class="log" id="ruleLog"></ul></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CAMERA -->
+  <section class="view" id="tab-camera" hidden>
+    <p class="lead">Each camera stream is analysed by an AI box on site. Video never leaves the site; only events like the ones below are sent to the platform, where they can raise alarms or trigger rules. The previews here are drawn, not real video.</p>
+    <div class="kpis">
+      <div class="card kpi"><div class="lbl">People detected today</div><div class="val" id="c-people">0</div></div>
+      <div class="card kpi"><div class="lbl">Vehicles in and out</div><div class="val" id="c-veh">0</div></div>
+      <div class="card kpi alarm"><div class="lbl">Safety events</div><div class="val" id="c-safe">0</div><div class="note">No helmet or vest in the aisle zone</div></div>
+    </div>
+    <div class="cams" id="camList"></div>
+    <div class="card">
+      <div class="card-h"><h2>Detection events</h2><span class="sub">Newest first</span></div>
+      <div class="card-b"><ul class="log" id="camLog"></ul></div>
+    </div>
+  </section>
+
+  <!-- API -->
+  <section class="view" id="tab-api" hidden>
+    <p class="lead">Everything on this console is also available through a REST API, so other systems can read data, onboard devices and change limits. Devices publish to MQTT topics such as <code class="mono">fieldmesh/&lt;site&gt;/&lt;device&gt;/telemetry</code>.</p>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-h"><h2>Endpoints</h2></div>
+        <div class="card-b">
+          <ul class="ep">
+            <li><span class="m">GET</span><code>/api/v1/devices</code><span>List devices with status and firmware</span></li>
+            <li><span class="m">POST</span><code>/api/v1/devices</code><span>Onboard a Wi-Fi or LoRaWAN device</span></li>
+            <li><span class="m">GET</span><code>/api/v1/devices/{id}/telemetry?from=&amp;to=</code><span>Readings for a time range</span></li>
+            <li><span class="m">PUT</span><code>/api/v1/devices/{id}/config</code><span>Change reporting interval and settings</span></li>
+            <li><span class="m">POST</span><code>/api/v1/devices/{id}/ota</code><span>Start a firmware update</span></li>
+            <li><span class="m">PUT</span><code>/api/v1/devices/{id}/thresholds</code><span>Set low and high limits</span></li>
+            <li><span class="m">GET</span><code>/api/v1/alarms?status=active</code><span>Open alarms</span></li>
+            <li><span class="m">GET</span><code>/api/v1/camera/events</code><span>AI detection events</span></li>
+          </ul>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h2>Live response</h2><span class="grow"></span><select class="ctl" id="apiDev" aria-label="Device for sample response"></select></div>
+        <div class="card-b"><div class="sub mono" id="apiReq" style="margin-bottom:8px;color:var(--muted);font-size:.8rem"></div><pre class="json" id="apiOut"></pre></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="scrim" id="scrim" hidden></div>
+<aside class="panel" id="panel" hidden aria-labelledby="p-title" role="dialog">
+  <div class="panel-h"><div><h2 id="p-title"></h2><div class="sub mono" id="p-sub" style="color:var(--muted);font-size:.8rem"></div></div><button class="x" id="p-close" aria-label="Close">×</button></div>
+  <div class="panel-b" id="p-body"></div>
+</aside>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script>
+(function(){
+const $=s=>document.querySelector(s);
+const TICK=2000, HIST=90;
+const METRICS={temp:{label:'Temperature',unit:'°C',dec:1},hum:{label:'Humidity',unit:'%RH',dec:0},co2:{label:'CO₂',unit:'ppm',dec:0},soil:{label:'Soil moisture',unit:'%VWC',dec:0}};
+const MDEF={temp:{base:22,sd:.3,lo:10,hi:30},hum:{base:55,sd:1.1,lo:30,hi:75},co2:{base:700,sd:22,lo:350,hi:1000},soil:{base:32,sd:.55,lo:20,hi:45}};
+const LATEST={wifi:'2.4.0',lora:'1.5.0',gw_lora:'2.2.0',gw_wifi:'1.9.0',camera:'4.1.2'};
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const randn=()=>{let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)};
+const tfmt=t=>new Date(t).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+const cssv=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmtV=(d,v=d.value)=>v==null?'–':(+v).toFixed(METRICS[d.metric].dec);
+const unit=d=>METRICS[d.metric].unit;
+
+let devices=[
+ {id:'GW-01',name:'Main building gateway',kind:'gateway',net:'lora',site:'Main building',fw:'2.1.0',backhaul:'Ethernet'},
+ {id:'GW-02',name:'Field gateway (solar)',kind:'gateway',net:'lora',site:'Field A',fw:'2.1.0',backhaul:'4G LTE'},
+ {id:'GW-03',name:'Warehouse Wi-Fi hub',kind:'gateway',net:'wifi',site:'Warehouse',fw:'1.8.3',backhaul:'Ethernet'},
+ {id:'WS-101',name:'Cold room 1',kind:'sensor',net:'wifi',site:'Warehouse',metric:'temp',base:4.5,sd:.17,lo:0,hi:8,fw:'2.3.0',rssi:-58},
+ {id:'WS-102',name:'Office air quality',kind:'sensor',net:'wifi',site:'Main building',metric:'co2',base:720,sd:20,lo:350,hi:1000,fw:'2.3.0',rssi:-64},
+ {id:'WS-103',name:'Warehouse humidity',kind:'sensor',net:'wifi',site:'Warehouse',metric:'hum',base:52,sd:1,lo:30,hi:70,fw:'2.2.4',rssi:-71},
+ {id:'LS-201',name:'Field A soil',kind:'sensor',net:'lora',site:'Field A',metric:'soil',base:31,sd:.5,lo:20,hi:45,fw:'1.4.2',battery:82,rssi:-104,snr:6.5,sf:9,gw:'GW-02'},
+ {id:'LS-202',name:'Field B soil',kind:'sensor',net:'lora',site:'Field B',metric:'soil',base:24.5,sd:.55,lo:20,hi:45,fw:'1.4.2',battery:67,rssi:-112,snr:1.8,sf:10,gw:'GW-02'},
+ {id:'LS-203',name:'Greenhouse temperature',kind:'sensor',net:'lora',site:'Greenhouse',metric:'temp',base:27,sd:.28,lo:12,hi:32,fw:'1.4.2',battery:91,rssi:-89,snr:9.2,sf:7,gw:'GW-01'},
+ {id:'LS-204',name:'Greenhouse humidity',kind:'sensor',net:'lora',site:'Greenhouse',metric:'hum',base:68,sd:1.2,lo:40,hi:85,fw:'1.4.0',battery:16,rssi:-95,snr:7.1,sf:8,gw:'GW-01'},
+ {id:'LS-205',name:'Pump house temperature',kind:'sensor',net:'lora',site:'Field B',metric:'temp',base:21,sd:.2,lo:5,hi:35,fw:'1.3.9',battery:4,rssi:-118,snr:-3.5,sf:12,gw:'GW-02',online:false,lastSeen:Date.now()-3*3600e3},
+ {id:'CAM-1',name:'Gate 2 camera',kind:'camera',net:'ip',site:'Main gate',fw:'4.0.8'},
+ {id:'CAM-2',name:'Loading bay camera',kind:'camera',net:'ip',site:'Warehouse',fw:'4.1.2'},
+ {id:'CAM-3',name:'Aisle 4 camera',kind:'camera',net:'ip',site:'Warehouse',fw:'4.1.2'}
+];
+devices.forEach(norm);
+function norm(d){
+  if(d.online===undefined)d.online=true;
+  if(!d.lastSeen)d.lastSeen=Date.now();
+  d.interval=d.interval||(d.net==='lora'?'5 min':'30 s');
+  if(d.kind==='sensor'){d.alert=true;d.state='ok';d.hist=d.hist||[];d.value=d.value??d.base;d.exc=0;}
+}
+const byId=id=>devices.find(d=>d.id===id);
+const sensors=()=>devices.filter(d=>d.kind==='sensor');
+
+let alerts=[], events=[], ruleLog=[], acked=new Set(), camEvents=[], camCount={people:0,veh:0,safe:0};
+let rules=[
+ {id:1,dev:'WS-101',op:'>',val:7.5,n:2,act:'Switch relay 1 on',label:'backup compressor',on:true,c:0},
+ {id:2,dev:'LS-202',op:'<',val:21,n:3,act:'Open irrigation valve',label:'Field B',on:true,c:0},
+ {id:3,dev:'WS-102',op:'>',val:950,n:2,act:'Run ventilation fan at 100%',label:'office',on:true,c:0}
+];
+let ruleSeq=4;
+
+function step(d){
+  let v=d.value;
+  if(d.exc>0){d.exc--;v+=d.excDir*d.sd*2.6+randn()*d.sd*.4;}
+  else{v+=(d.base-v)*.1+randn()*d.sd; if(Math.random()<.006){d.exc=7+(Math.random()*6|0);d.excDir=Math.random()<.72?1:-1;}}
+  d.value=v; d.hist.push(v); if(d.hist.length>HIST)d.hist.shift();
+}
+// warm up history; force one live excursion so the demo opens with an alarm
+sensors().forEach(d=>{for(let i=0;i<HIST;i++){if(d.id==='WS-102'&&i===HIST-12){d.exc=14;d.excDir=1}step(d)} if(!d.online){d.hist=d.hist.map(()=>d.base);d.value=d.base}});
+sensors().forEach(d=>{d.state=calcState(d)});
+
+function calcState(d){return d.value>d.hi?'high':d.value<d.lo?'low':'ok'}
+function log(sev,text,t=Date.now(),dev){events.unshift({t,sev,text,dev});events=events.slice(0,60)}
+log('warn','Pump house temperature (LS-205) stopped reporting. Battery at 4%.',Date.now()-3*3600e3);
+log('ok','Firmware 1.4.2 installed on Field A soil (LS-201)',Date.now()-46*60e3);
+log('warn','Greenhouse humidity (LS-204) battery below 20%',Date.now()-22*60e3);
+log('ok','Rule "Run ventilation fan at 100%" ran for Office air quality',Date.now()-9*60e3);
+sensors().forEach(d=>{if(d.state!=='ok')log('crit',`${d.name} is ${d.state==='high'?'above':'below'} its ${d.state} limit: ${fmtV(d)} ${unit(d)}`,Date.now()-8e3)});
+ruleLog=[{t:Date.now()-9*60e3,text:'Run ventilation fan at 100% (office) — Office air quality above 950 ppm'},{t:Date.now()-41*60e3,text:'Open irrigation valve (Field B) — Field B soil below 21 %VWC'}];
+
+/* ---------- alarms ---------- */
+function activeAlarms(){
+  const list=[];
+  sensors().forEach(d=>{
+    if(d.online&&d.alert&&d.state!=='ok')list.push({key:d.id+':th',sev:'crit',dev:d,title:`${d.name}: ${d.state==='high'?'above high limit':'below low limit'}`,detail:`${fmtV(d)} ${unit(d)} · limit ${d.state==='high'?d.hi:d.lo} ${unit(d)}`});
+    if(!d.online&&!d.joining)list.push({key:d.id+':off',sev:'warn',dev:d,title:`${d.name}: not reporting`,detail:`Last message ${ago(d.lastSeen)}`});
+    if(d.battery!=null&&d.battery<20&&d.online)list.push({key:d.id+':bat',sev:'warn',dev:d,title:`${d.name}: low battery`,detail:`${d.battery}% · replace soon`});
+  });
+  return list;
+}
+function ago(t){const s=(Date.now()-t)/1e3;if(s<60)return 'just now';if(s<3600)return Math.round(s/60)+' min ago';return Math.round(s/3600)+' h ago'}
+
+/* ---------- tabs ---------- */
+let tab='overview';
+function showTab(t){
+  tab=t;
+  document.querySelectorAll('.tab').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===t));
+  document.querySelectorAll('section.view').forEach(s=>s.hidden=s.id!=='tab-'+t);
+  try{history.replaceState(null,'','#'+t)}catch(e){}
+  renderAll();
+}
+document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>showTab(b.dataset.tab)));
+
+/* ---------- charts ---------- */
+function setup(c){
+  const dpr=window.devicePixelRatio||1, w=c.clientWidth, h=c.clientHeight;
+  if(!w||!h)return null;
+  if(c.width!==Math.round(w*dpr)||c.height!==Math.round(h*dpr)){c.width=Math.round(w*dpr);c.height=Math.round(h*dpr)}
+  const ctx=c.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);return {ctx,w,h};
+}
+function niceStep(range,count){const raw=range/count,p=Math.pow(10,Math.floor(Math.log10(raw))),m=raw/p;return (m<1.5?1:m<3?2:m<7?5:10)*p}
+let mainDev='WS-102', hover=null;
+function drawMain(){
+  const d=byId(mainDev); const c=$('#mainChart'); const s=setup(c); if(!s||!d)return;
+  const {ctx,w,h}=s, P={l:52,r:16,t:12,b:26};
+  const data=d.hist; if(!data.length)return;
+  let mn=Math.min(...data,d.lo), mx=Math.max(...data,d.hi); const sp=(mx-mn)||1; mn-=sp*.08; mx+=sp*.08;
+  const st=niceStep(mx-mn,5), y0=Math.floor(mn/st)*st, y1=Math.ceil(mx/st)*st, dec=st<1?1:0;
+  const pw=w-P.l-P.r, ph=h-P.t-P.b;
+  const X=i=>P.l+(i/(HIST-1))*pw, Y=v=>P.t+(1-(v-y0)/(y1-y0))*ph;
+  const off=HIST-data.length;
+  const C={grid:cssv('--grid'),muted:cssv('--muted'),accent:cssv('--accent'),crit:cssv('--crit'),band:cssv('--band'),fg:cssv('--fg'),surface:cssv('--surface'),line:cssv('--line')};
+  const mono=cssv('--f-mono')||'monospace';
+  ctx.fillStyle=C.band; ctx.fillRect(P.l,Y(d.hi),pw,Y(d.lo)-Y(d.hi));
+  ctx.font=`11px ${mono}`; ctx.textAlign='right'; ctx.textBaseline='middle';
+  for(let v=y0;v<=y1+st*1e-6;v+=st){const y=Math.round(Y(v))+.5;ctx.strokeStyle=C.grid;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(P.l,y);ctx.lineTo(w-P.r,y);ctx.stroke();ctx.fillStyle=C.muted;ctx.fillText(v.toFixed(dec),P.l-8,y)}
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  [[0,'3 min ago'],[30,'2 min'],[60,'1 min'],[HIST-1,'now']].forEach(([i,l])=>{ctx.fillStyle=C.muted;ctx.textAlign=i===0?'left':i===HIST-1?'right':'center';ctx.fillText(l,X(i),h-P.b+8)});
+  // limits
+  ctx.setLineDash([5,4]); ctx.strokeStyle=C.crit; ctx.lineWidth=1.2;
+  [['High',d.hi],['Low',d.lo]].forEach(([n,v])=>{const y=Math.round(Y(v))+.5;ctx.beginPath();ctx.moveTo(P.l,y);ctx.lineTo(w-P.r,y);ctx.stroke();ctx.fillStyle=C.crit;ctx.textAlign='right';ctx.textBaseline=n==='High'?'bottom':'top';ctx.fillText(`${n} ${v} ${unit(d)}`,w-P.r-2,n==='High'?y-3:y+3)});
+  ctx.setLineDash([]);
+  // area
+  ctx.beginPath(); data.forEach((v,k)=>{const x=X(off+k),y=Y(v);k?ctx.lineTo(x,y):ctx.moveTo(x,y)}); ctx.lineTo(X(HIST-1),P.t+ph); ctx.lineTo(X(off),P.t+ph); ctx.closePath();
+  ctx.globalAlpha=.12; ctx.fillStyle=C.accent; ctx.fill(); ctx.globalAlpha=1;
+  // line
+  ctx.beginPath(); data.forEach((v,k)=>{const x=X(off+k),y=Y(v);k?ctx.lineTo(x,y):ctx.moveTo(x,y)}); ctx.strokeStyle=C.accent; ctx.lineWidth=2; ctx.lineJoin='round'; ctx.stroke();
+  // breach dots
+  ctx.fillStyle=C.crit; data.forEach((v,k)=>{if(v>d.hi||v<d.lo){ctx.beginPath();ctx.arc(X(off+k),Y(v),2.6,0,7);ctx.fill()}});
+  // endpoint
+  const last=data[data.length-1], lc=(last>d.hi||last<d.lo)?C.crit:C.accent;
+  ctx.beginPath();ctx.arc(X(HIST-1),Y(last),5,0,7);ctx.fillStyle=C.surface;ctx.fill();ctx.lineWidth=2.5;ctx.strokeStyle=lc;ctx.stroke();
+  // hover
+  if(hover!=null&&hover>=off){
+    const k=hover-off, v=data[k], x=X(hover), y=Y(v);
+    ctx.strokeStyle=C.muted;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x+.5,P.t);ctx.lineTo(x+.5,P.t+ph);ctx.stroke();
+    ctx.beginPath();ctx.arc(x,y,4,0,7);ctx.fillStyle=C.accent;ctx.fill();
+    const secs=(HIST-1-hover)*2, txt=`${fmtV(d,v)} ${unit(d)}`, sub=secs?`${secs} s ago`:'now';
+    ctx.font=`600 12px ${mono}`; const tw=Math.max(ctx.measureText(txt).width,ctx.measureText(sub).width)+16;
+    let bx=x+10; if(bx+tw>w-P.r)bx=x-10-tw; const by=Math.max(P.t,y-40);
+    ctx.fillStyle=C.surface;ctx.strokeStyle=C.line;ctx.lineWidth=1;ctx.beginPath();ctx.roundRect?ctx.roundRect(bx,by,tw,36,6):ctx.rect(bx,by,tw,36);ctx.fill();ctx.stroke();
+    ctx.textAlign='left';ctx.textBaseline='top';ctx.fillStyle=C.fg;ctx.fillText(txt,bx+8,by+5);ctx.font=`11px ${mono}`;ctx.fillStyle=C.muted;ctx.fillText(sub,bx+8,by+20);
+  }
+  const c2=$('#mainChart'); c2._X={P,pw};
+}
+const mc=$('#mainChart');
+mc.addEventListener('mousemove',e=>{const r=mc.getBoundingClientRect(),g=mc._X;if(!g)return;const i=Math.round((e.clientX-r.left-g.P.l)/g.pw*(HIST-1));hover=(i>=0&&i<HIST)?i:null;drawMain()});
+mc.addEventListener('mouseleave',()=>{hover=null;drawMain()});
+
+function spark(c,d){
+  const s=setup(c); if(!s)return; const {ctx,w,h}=s, data=d.hist.slice(-40); if(data.length<2)return;
+  let mn=Math.min(...data),mx=Math.max(...data); if(mx-mn<1e-6){mx+=1;mn-=1}
+  const X=i=>2+i/(data.length-1)*(w-6), Y=v=>3+(1-(v-mn)/(mx-mn))*(h-6);
+  const col=d.online?(d.state==='ok'?cssv('--accent'):cssv('--crit')):cssv('--idle');
+  ctx.beginPath();data.forEach((v,i)=>i?ctx.lineTo(X(i),Y(v)):ctx.moveTo(X(i),Y(v)));ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.stroke();
+  ctx.beginPath();ctx.arc(X(data.length-1),Y(data[data.length-1]),2.4,0,7);ctx.fillStyle=col;ctx.fill();
+}
+
+/* ---------- overview ---------- */
+function fillSelects(){
+  const opts=sensors().map(d=>`<option value="${d.id}">${esc(d.name)} (${d.id})</option>`).join('');
+  ['#mainDev','#r-dev','#apiDev'].forEach(s=>{const el=$(s),v=el.value;el.innerHTML=opts;el.value=v&&byId(v)?v:(s==='#mainDev'?mainDev:sensors()[0].id)});
+}
+$('#mainDev').addEventListener('change',e=>{mainDev=e.target.value;renderOverview()});
+function status(d){if(d.joining)return 'joining';if(d.ota)return 'updating';return d.online?'online':'offline'}
+const STLABEL={online:'Online',offline:'Offline',joining:'Joining',updating:'Updating',ok:'Normal',high:'Above limit',low:'Below limit'};
+
+function renderOverview(){
+  const all=devices, on=all.filter(d=>d.online).length;
+  $('#k-online').innerHTML=`${on}<small> / ${all.length}</small>`;
+  $('#k-online-n').textContent=`${sensors().filter(d=>d.net==='wifi').length} Wi-Fi · ${sensors().filter(d=>d.net==='lora').length} LoRaWAN sensors`;
+  const al=activeAlarms(), un=al.filter(a=>!acked.has(a.key));
+  $('#k-alarms').textContent=al.length; $('#k-alarms-n').textContent=`${un.length} not acknowledged`;
+  $('#k-msgs').textContent=msgsPerMin; $('#k-cam').textContent=camEvents.length+camBase;
+  const cnt=$('#cnt-alarms'); cnt.textContent=un.length; cnt.toggleAttribute('data-zero',!un.length);
+  $('#al-sub').textContent=al.length?`${al.length} open`:'';
+  $('#alarmList').innerHTML=al.length?al.sort((a,b)=>(a.sev==='crit'?0:1)-(b.sev==='crit'?0:1)).map(a=>`<li class="alarm-i ${a.sev}${acked.has(a.key)?' acked':''}"><i class="stripe"></i><div><b>${esc(a.title)}</b><span class="mono">${esc(a.detail)}</span></div>${acked.has(a.key)?'<span class="pill offline">Acknowledged</span>':`<button class="btn sm" data-ack="${a.key}">Acknowledge</button>`}</li>`).join(''):'<li class="empty">No open alarms. All sensors are inside their limits.</li>';
+  // readout
+  const d=byId(mainDev); if($('#mainDev').value!==mainDev)$('#mainDev').value=mainDev;
+  if(d){$('#ro-val').textContent=`${fmtV(d)} ${unit(d)}`;const st=d.online?d.state:'offline';const p=$('#ro-state');p.className='pill '+st;p.textContent=STLABEL[st];
+    $('#ro-meta').textContent=`${METRICS[d.metric].label} · ${d.site} · limits ${d.lo}–${d.hi} ${unit(d)} · ${d.net==='lora'?`LoRaWAN SF${d.sf}, ${d.rssi} dBm`:`Wi-Fi ${d.rssi} dBm`}`;}
+  drawMain();
+  // gateways
+  $('#gwList').innerHTML=devices.filter(d=>d.kind==='gateway').map(g=>{
+    const nodes=g.net==='lora'?sensors().filter(s=>s.gw===g.id):sensors().filter(s=>s.net==='wifi');
+    const live=nodes.filter(s=>s.online), rs=live.filter(s=>s.rssi!=null);
+    const avg=rs.length?Math.round(rs.reduce((a,s)=>a+s.rssi,0)/rs.length):'–';
+    return `<div class="card gw"><div class="gw-top"><div><b>${esc(g.name)}</b><small>${g.id} · ${g.net==='lora'?'LoRaWAN':'Wi-Fi'} · ${g.backhaul}</small></div><span class="pill ${status(g)}">${STLABEL[status(g)]}</span></div>
+    <dl class="kv"><div><dt>Devices</dt><dd>${live.length}/${nodes.length}</dd></div><div><dt>Msgs/min</dt><dd>${live.length*30+(g._j||0)}</dd></div><div><dt>Avg RSSI</dt><dd>${avg}${avg==='–'?'':' dBm'}</dd></div></dl></div>`}).join('');
+  $('#eventLog').innerHTML=events.slice(0,30).map(e=>`<li><time>${tfmt(e.t)}</time><span class="pill ${e.sev}">${e.sev==='crit'?'Alarm':e.sev==='warn'?'Warning':'Info'}</span><span style="white-space:normal">${esc(e.text)}</span></li>`).join('');
+}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-ack]');if(b){acked.add(b.dataset.ack);log('ok',`Alarm acknowledged: ${b.closest('li').querySelector('b').textContent}`);renderAll()}});
+
+/* ---------- devices ---------- */
+let filter='all';
+$('#devFilter').addEventListener('click',e=>{const c=e.target.closest('.chip');if(!c)return;filter=c.dataset.f;document.querySelectorAll('#devFilter .chip').forEach(x=>x.setAttribute('aria-pressed',x===c));buildDevTable()});
+function devVisible(d){if(filter==='all')return true;if(filter==='gateway'||filter==='camera')return d.kind===filter;return d.kind==='sensor'&&d.net===filter}
+function buildDevTable(){
+  $('#devBody').innerHTML=devices.filter(devVisible).map(d=>`<tr data-id="${d.id}">
+    <td><div class="name">${esc(d.name)}</div><div class="id">${d.id}</div></td>
+    <td><span class="tag ${d.net==='lora'?'lora':''}">${d.net==='lora'?'LoRaWAN':d.net==='wifi'?'Wi-Fi':'IP camera'}</span>${d.kind==='gateway'?' <span class="tag">Gateway</span>':''}</td>
+    <td>${esc(d.site)}</td>
+    <td class="c-st"></td>
+    <td class="c-rd">${d.kind==='sensor'?'<div class="reading"><canvas></canvas><span class="num"></span></div>':d.kind==='camera'?'<span class="sub" style="color:var(--muted)">AI events</span>':'<span class="num c-gw"></span>'}</td>
+    <td class="c-sig num"></td><td class="c-bat"></td><td class="c-fw num"></td>
+    <td class="right"><div class="actions" style="justify-content:flex-end"><button class="btn sm" data-cfg="${d.id}">Configure</button></div></td></tr>`).join('');
+  updDevTable();
+}
+function updDevTable(){
+  $('#dev-sub').textContent=`${devices.length} total`;
+  document.querySelectorAll('#devBody tr').forEach(tr=>{
+    const d=byId(tr.dataset.id); if(!d)return; const st=status(d);
+    tr.querySelector('.c-st').innerHTML=`<span class="pill ${st}">${STLABEL[st]}</span>${!d.online&&!d.joining?`<div class="id">${ago(d.lastSeen)}</div>`:''}`;
+    if(d.kind==='sensor'){tr.querySelector('.reading .num').textContent=d.online||d.hist.length?`${fmtV(d)} ${unit(d)}`:'–';if(d.online&&d.state!=='ok')tr.querySelector('.reading .num').style.color='var(--crit)';else tr.querySelector('.reading .num').style.color='';spark(tr.querySelector('canvas'),d)}
+    if(d.kind==='gateway'){const n=d.net==='lora'?sensors().filter(s=>s.gw===d.id&&s.online).length:sensors().filter(s=>s.net==='wifi'&&s.online).length;tr.querySelector('.c-gw').textContent=`${n} devices connected`}
+    tr.querySelector('.c-sig').textContent=d.net==='lora'&&d.kind==='sensor'?`${d.rssi} dBm · SNR ${d.snr} · SF${d.sf}`:d.rssi!=null?`${d.rssi} dBm`:'–';
+    tr.querySelector('.c-bat').innerHTML=d.battery!=null?`<span class="batt ${d.battery<20?'low':''}"><i style="--p:${Math.max(2,d.battery)*.24}px"></i><span class="num">${d.battery}%</span></span>`:'<span class="sub" style="color:var(--muted)">Mains</span>';
+    tr.querySelector('.c-fw').textContent=d.ota?`${d.fw} → ${d.ota.to} (${Math.floor(d.ota.p)}%)`:d.fw;
+  });
+}
+// add device
+const hex=n=>Array.from({length:n},()=>'0123456789ABCDEF'[Math.random()*16|0]).join('');
+function prepAdd(){
+  const lora=$('#nd-net').value==='lora';
+  $('#nd-hw-l').textContent=lora?'DevEUI':'MAC address';
+  $('#nd-hw').value=lora?'70B3D57ED0'+hex(6):'24:6F:28:'+hex(2)+':'+hex(2)+':'+hex(2);
+  $('#nd-key-f').hidden=!lora; $('#nd-key').value=hex(32);
+  $('#nd-hint').textContent=lora?'The sensor joins the network with OTAA using this DevEUI and AppKey. It shows as Joining until its first uplink arrives.':'The device connects over Wi-Fi with its own certificate and starts sending readings over MQTT.';
+}
+$('#nd-net').addEventListener('change',prepAdd); prepAdd();
+let seq={wifi:104,lora:206};
+$('#addForm').addEventListener('submit',e=>{
+  e.preventDefault(); const name=$('#nd-name').value.trim();
+  if(!name){$('#nd-name').focus();toast('Give the device a name first.');return}
+  const net=$('#nd-net').value, m=$('#nd-metric').value, def=MDEF[m];
+  const id=(net==='lora'?'LS-':'WS-')+(seq[net]++);
+  const d={id,name,kind:'sensor',net,site:$('#nd-site').value,metric:m,base:def.base,sd:def.sd,lo:def.lo,hi:def.hi,fw:LATEST[net],online:false,joining:net==='lora'?4:2,hist:[],
+    rssi:net==='lora'?-98:-62,snr:net==='lora'?5.4:undefined,sf:net==='lora'?9:undefined,gw:net==='lora'?'GW-01':undefined,battery:net==='lora'?100:undefined,hw:$('#nd-hw').value};
+  norm(d); d.online=false; devices.push(d);
+  log('ok',`${name} (${id}) added. Waiting for first ${net==='lora'?'uplink':'message'}.`);
+  toast(`${name} added. It will show as Online after its first message.`);
+  $('#nd-name').value=''; prepAdd(); fillSelects(); buildDevTable(); buildThTable(); renderAll();
+});
+
+/* ---------- panel ---------- */
+let panelId=null;
+document.addEventListener('click',e=>{const b=e.target.closest('[data-cfg]');if(b)openPanel(b.dataset.cfg)});
+$('#p-close').addEventListener('click',closePanel); $('#scrim').addEventListener('click',closePanel);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&panelId)closePanel()});
+function closePanel(){panelId=null;$('#panel').hidden=true;$('#scrim').hidden=true}
+function latestFor(d){return d.kind==='gateway'?LATEST['gw_'+d.net]:d.kind==='camera'?LATEST.camera:LATEST[d.net]}
+function openPanel(id){
+  const d=byId(id); panelId=id;
+  $('#p-title').textContent=d.name; $('#p-sub').textContent=`${d.id} · ${d.site}${d.hw?' · '+d.hw:''}`;
+  const lora=d.net==='lora'&&d.kind==='sensor';
+  const intervals=lora?['1 min','5 min','15 min','30 min']:['10 s','30 s','1 min','5 min'];
+  $('#p-body').innerHTML=`
+   ${!d.online?`<p class="note">This device is ${d.joining?'joining the network':'offline'}. Changes are queued and sent when it reconnects.</p>`:''}
+   <section><h3>Settings</h3>
+     <div class="field"><label for="p-name">Name</label><input class="ctl" id="p-name" value="${esc(d.name)}"></div>
+     ${d.kind==='sensor'?`<div class="field"><label for="p-int">Reporting interval</label><select class="ctl" id="p-int">${intervals.map(i=>`<option${i===d.interval?' selected':''}>${i}</option>`).join('')}</select></div>`:''}
+     ${d.kind==='camera'?`<div class="field"><label for="p-int">Detection sensitivity</label><select class="ctl" id="p-int"><option>Low</option><option selected>Medium</option><option>High</option></select></div>`:''}
+     ${lora?'<p class="note">LoRaWAN settings go out as a downlink. The sensor applies them right after its next uplink.</p>':''}
+     <div><button class="btn primary" id="p-save">Save and send to device</button> <span class="sub" id="p-cfgst" style="color:var(--muted);font-size:.85rem"></span></div>
+   </section>
+   <section><h3>Firmware</h3>
+     <div class="sub" style="color:var(--muted)">Installed <b class="mono" style="color:var(--fg)">${d.fw}</b> · Latest <b class="mono" style="color:var(--fg)" id="p-latest">${latestFor(d)}</b></div>
+     <div class="bar"><i id="p-bar"></i></div><div class="sub mono" id="p-ota" style="color:var(--muted);font-size:.8rem"></div>
+     ${lora?'<p class="note">Over LoRaWAN, firmware is sent in small fragments (FUOTA). Expect it to take much longer than over Wi-Fi, and only on devices that support it.</p>':''}
+     <div><button class="btn" id="p-upd">Install ${latestFor(d)}</button></div>
+   </section>`;
+  $('#p-save').addEventListener('click',()=>{
+    const nm=$('#p-name').value.trim(); if(nm){d.name=nm}
+    const iv=$('#p-int'); if(iv&&d.kind==='sensor')d.interval=iv.value;
+    d.cfg={ticks:lora||!d.online?3:1}; $('#p-cfgst').textContent=lora?'Queued as downlink…':'Sending…';
+    fillSelects(); buildDevTable(); buildThTable(); renderAll();
+  });
+  $('#p-upd').addEventListener('click',()=>{
+    if(d.fw===latestFor(d)){toast(`${d.name} already runs the latest firmware.`);return}
+    if(!d.online){toast(`${d.name} is offline. The update starts when it reconnects.`);return}
+    d.ota={p:0,to:latestFor(d),rate:lora?2.5:11}; log('ok',`Firmware update to ${d.ota.to} started on ${d.name}`); updPanel(); updDevTable();
+  });
+  updPanel(); $('#panel').hidden=false; $('#scrim').hidden=false; $('#p-name').focus();
+}
+function updPanel(){
+  if(!panelId)return; const d=byId(panelId); const bar=$('#p-bar'); if(!bar)return;
+  const lora=d.net==='lora'&&d.kind==='sensor';
+  if(d.ota){bar.style.width=d.ota.p+'%';$('#p-ota').textContent=lora?`Fragments received ${Math.floor(d.ota.p*1.2)}/120`:`Downloading and verifying ${Math.floor(d.ota.p)}%`;$('#p-upd').disabled=true}
+  else{bar.style.width=d.fw===latestFor(d)?'100%':'0';$('#p-ota').textContent=d.fw===latestFor(d)?'Up to date':'Update available';$('#p-upd').disabled=d.fw===latestFor(d)}
+}
+
+/* ---------- thresholds & rules ---------- */
+function buildThTable(){
+  $('#thBody').innerHTML=sensors().map(d=>`<tr data-id="${d.id}">
+    <td><div class="name">${esc(d.name)}</div><div class="id">${d.id}</div></td>
+    <td>${METRICS[d.metric].label} <span class="id">${unit(d)}</span></td>
+    <td class="right num c-now"></td>
+    <td><input class="ctl num mono" type="number" step="any" id="lo-${d.id}" value="${d.lo}" aria-label="Low limit for ${esc(d.name)}"></td>
+    <td><input class="ctl num mono" type="number" step="any" id="hi-${d.id}" value="${d.hi}" aria-label="High limit for ${esc(d.name)}"></td>
+    <td><label class="toggle"><input type="checkbox" id="al-${d.id}" ${d.alert?'checked':''} aria-label="Alarm on for ${esc(d.name)}"><span></span></label></td>
+    <td class="c-s"></td></tr>`).join('');
+  updThTable();
+}
+$('#thBody').addEventListener('change',e=>{
+  const tr=e.target.closest('tr'); if(!tr)return; const d=byId(tr.dataset.id);
+  if(e.target.type==='checkbox'){d.alert=e.target.checked;log('ok',`Alarm ${d.alert?'turned on':'turned off'} for ${d.name}`);renderAll();return}
+  const lo=parseFloat($('#lo-'+d.id).value), hi=parseFloat($('#hi-'+d.id).value);
+  if(isNaN(lo)||isNaN(hi)||lo>=hi){toast('The low limit must be a number below the high limit.');$('#lo-'+d.id).value=d.lo;$('#hi-'+d.id).value=d.hi;return}
+  d.lo=lo; d.hi=hi; log('ok',`Limits for ${d.name} set to ${lo}–${hi} ${unit(d)}`); toast(`Limits saved for ${d.name}: ${lo} to ${hi} ${unit(d)}`);
+  checkState(d); renderAll();
+});
+function updThTable(){
+  document.querySelectorAll('#thBody tr').forEach(tr=>{const d=byId(tr.dataset.id);if(!d)return;
+    const n=tr.querySelector('.c-now'); n.textContent=d.online?`${fmtV(d)}`:'–'; n.style.color=d.online&&d.state!=='ok'?'var(--crit)':'';
+    const st=!d.online?(d.joining?'joining':'offline'):d.state; tr.querySelector('.c-s').innerHTML=`<span class="pill ${st}">${STLABEL[st]}</span>`;});
+}
+function renderRules(){
+  $('#ruleList').innerHTML=rules.map(r=>{const d=byId(r.dev);if(!d)return '';return `<li class="rule"><p><span class="kw">IF</span> ${esc(d.name)} is ${r.op==='>'?'above':'below'} <b class="mono">${r.val} ${unit(d)}</b> for ${r.n} reading${r.n>1?'s':''} <span class="kw">THEN</span> ${esc(r.act)}${r.label?' ('+esc(r.label)+')':''}<small>${r.on?(r.c?`Condition met ${r.c}/${r.n}`:'Watching'):'Paused'}</small></p>
+   <label class="toggle"><input type="checkbox" data-rule="${r.id}" ${r.on?'checked':''} aria-label="Rule on"><span></span></label><button class="btn sm" data-rdel="${r.id}">Remove</button></li>`}).join('')||'<li class="empty">No rules yet. Add one below.</li>';
+  $('#ruleLog').innerHTML=ruleLog.slice(0,30).map(l=>`<li><time>${tfmt(l.t)}</time><span class="pill ok">Ran</span><span style="white-space:normal">${esc(l.text)}</span></li>`).join('')||'<li class="empty">Nothing yet.</li>';
+}
+$('#ruleList').addEventListener('change',e=>{const id=+e.target.dataset.rule;const r=rules.find(x=>x.id===id);if(r){r.on=e.target.checked;r.c=0;renderRules()}});
+$('#ruleList').addEventListener('click',e=>{const b=e.target.closest('[data-rdel]');if(b){rules=rules.filter(r=>r.id!==+b.dataset.rdel);renderRules()}});
+$('#r-dev').addEventListener('change',()=>{const d=byId($('#r-dev').value);$('#r-val').placeholder=d?`${unit(d)}, e.g. ${d.hi}`:''});
+$('#ruleForm').addEventListener('submit',e=>{
+  e.preventDefault(); const v=parseFloat($('#r-val').value); if(isNaN(v)){$('#r-val').focus();toast('Enter the value the rule should compare against.');return}
+  const n=Math.min(20,Math.max(1,parseInt($('#r-n').value)||1));
+  rules.push({id:ruleSeq++,dev:$('#r-dev').value,op:$('#r-op').value,val:v,n,act:$('#r-act').value,on:true,c:0});
+  $('#r-val').value=''; toast('Rule added. It starts checking with the next reading.'); renderRules();
+});
+function evalRules(){
+  rules.forEach(r=>{if(!r.on)return;const d=byId(r.dev);if(!d||!d.online)return;
+    const hit=r.op==='>'?d.value>r.val:d.value<r.val; r.c=hit?r.c+1:0;
+    if(r.c===r.n){const txt=`${r.act}${r.label?' ('+r.label+')':''} — ${d.name} ${r.op==='>'?'above':'below'} ${r.val} ${unit(d)}`;ruleLog.unshift({t:Date.now(),text:txt});log('ok',`Rule ran: ${txt}`);toast(`Rule ran: ${r.act}`)}});
+}
+
+/* ---------- camera ---------- */
+const CAMS=[
+ {id:'CAM-1',name:'Gate 2',zone:'Entry lane',types:[['Person',.55],['Vehicle',.45]],objs:[]},
+ {id:'CAM-2',name:'Loading bay',zone:'Dock 1–3',types:[['Truck',.4],['Forklift',.35],['Person',.25]],objs:[]},
+ {id:'CAM-3',name:'Aisle 4',zone:'PPE zone',types:[['Person',.75],['No helmet',.25]],objs:[]}
+];
+const camBase=186; camCount={people:142,veh:38,safe:3};
+function buildCams(){$('#camList').innerHTML=CAMS.map(c=>`<div class="card cam"><canvas id="cv-${c.id}" aria-label="${c.name} preview"></canvas><div class="cam-f"><div><b>${c.name}</b> <small>${c.id} · ${c.zone}</small></div><span class="pill online" id="cs-${c.id}">Analysing</span></div></div>`).join('')}
+function camEvent(){
+  const c=CAMS[Math.random()*CAMS.length|0]; let r=Math.random(),t=c.types[0][0];
+  for(const [n,p] of c.types){if(r<p){t=n;break}r-=p}
+  const conf=(.78+Math.random()*.2).toFixed(2);
+  const ev={t:Date.now(),cam:c,type:t,conf}; camEvents.unshift(ev); camEvents=camEvents.slice(0,80);
+  if(t==='Person')camCount.people++; else if(t==='No helmet'){camCount.safe++;log('warn',`${c.name} camera: person without helmet in ${c.zone} (confidence ${conf})`)} else camCount.veh++;
+  const w=t==='Person'||t==='No helmet'?.09:.24, h=t==='Person'||t==='No helmet'?.42:.34;
+  c.objs.push({x:Math.random()<.5?-.05:.85,y:.4+Math.random()*.2,w,h,vx:(Math.random()<.5?1:-1)*(.002+Math.random()*.002),label:`${t} ${conf}`,warn:t==='No helmet',ttl:220});
+  c.objs.forEach(o=>{if(o.x<0)o.vx=Math.abs(o.vx);if(o.x>.8)o.vx=-Math.abs(o.vx)});
+}
+for(let i=0;i<6;i++)camEvent();
+function drawCams(){
+  if(tab!=='camera')return;
+  const mono=cssv('--f-mono')||'monospace';
+  CAMS.forEach((c,ci)=>{
+    const cv=document.getElementById('cv-'+c.id); if(!cv)return; const s=setup(cv); if(!s)return; const {ctx,w,h}=s;
+    const g=ctx.createLinearGradient(0,0,0,h); g.addColorStop(0,'#1b2a31'); g.addColorStop(.55,'#24343b'); g.addColorStop(1,'#141c20'); ctx.fillStyle=g; ctx.fillRect(0,0,w,h);
+    ctx.strokeStyle='rgba(180,210,220,.10)'; ctx.lineWidth=1;
+    for(let i=-6;i<=6;i++){ctx.beginPath();ctx.moveTo(w/2+i*w*.02,h*.45);ctx.lineTo(w/2+i*w*.22,h);ctx.stroke()}
+    for(let j=0;j<5;j++){const y=h*.45+(h*.55)*Math.pow(j/5,1.6);ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke()}
+    ctx.fillStyle='rgba(180,210,220,.06)'; ctx.fillRect(ci===1?w*.05:w*.62,h*.12,w*.3,h*.3);
+    // zone polygon
+    ctx.strokeStyle='rgba(226,169,72,.7)'; ctx.setLineDash([6,4]); ctx.beginPath(); ctx.moveTo(w*.2,h*.95); ctx.lineTo(w*.38,h*.5); ctx.lineTo(w*.66,h*.5); ctx.lineTo(w*.86,h*.95); ctx.closePath(); ctx.stroke(); ctx.setLineDash([]);
+    c.objs.forEach(o=>{
+      const x=o.x*w,y=o.y*h-o.h*h*.5,bw=o.w*w,bh=o.h*h, col=o.warn?'#f06b5e':'#4fc283';
+      ctx.fillStyle='rgba(200,220,228,.18)'; ctx.fillRect(x+bw*.15,y+bh*.1,bw*.7,bh*.85);
+      ctx.strokeStyle=col; ctx.lineWidth=2; ctx.strokeRect(x,y,bw,bh);
+      ctx.font=`600 11px ${mono}`; const tw=ctx.measureText(o.label).width+8; ctx.fillStyle=col; ctx.fillRect(x,y-16,tw,16); ctx.fillStyle='#0b1013'; ctx.textBaseline='middle'; ctx.textAlign='left'; ctx.fillText(o.label,x+4,y-8);
+    });
+    ctx.font=`11px ${mono}`; ctx.fillStyle='rgba(225,235,240,.85)'; ctx.textBaseline='top'; ctx.textAlign='left';
+    ctx.fillText(`${c.id}  ${new Date().toLocaleString()}`,10,8); ctx.textAlign='right'; ctx.fillStyle='#f06b5e'; ctx.fillText('● AI', w-10, 8);
+  });
+}
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+function anim(){CAMS.forEach(c=>{c.objs.forEach(o=>{if(!reduce)o.x+=o.vx;o.ttl--});c.objs=c.objs.filter(o=>o.ttl>0&&o.x>-.3&&o.x<1.1)});drawCams();requestAnimationFrame(anim)}
+function renderCamera(){
+  $('#c-people').textContent=camCount.people; $('#c-veh').textContent=camCount.veh; $('#c-safe').textContent=camCount.safe;
+  $('#camLog').innerHTML=camEvents.slice(0,25).map(e=>`<li><time>${tfmt(e.t)}</time><span class="pill ${e.type==='No helmet'?'crit':'online'}">${esc(e.type)}</span><span>${e.cam.name} · ${e.cam.zone} · confidence <span class="mono">${e.conf}</span></span></li>`).join('');
+}
+
+/* ---------- api ---------- */
+function renderApi(){
+  const d=byId($('#apiDev').value)||sensors()[0];
+  $('#apiReq').textContent=`GET /api/v1/devices/${d.id}/telemetry?limit=1`;
+  const o={deviceId:d.id,name:d.name,site:d.site,network:d.net==='lora'?'lorawan':'wifi',status:status(d),
+    telemetry:{ts:new Date(d.online?Date.now():d.lastSeen).toISOString(),[d.metric]:+fmtV(d),unit:unit(d)},
+    thresholds:{low:d.lo,high:d.hi,alarmEnabled:d.alert,state:d.online?d.state:'unknown'},
+    radio:d.net==='lora'?{rssi:d.rssi,snr:d.snr,spreadingFactor:d.sf,gateway:d.gw}:{rssi:d.rssi},
+    firmware:d.fw, battery:d.battery!=null?d.battery:'mains'};
+  $('#apiOut').textContent=JSON.stringify(o,null,2);
+}
+$('#apiDev').addEventListener('change',renderApi);
+
+/* ---------- loop ---------- */
+let msgsPerMin=0;
+function checkState(d){
+  const st=calcState(d); if(st===d.state)return;
+  const prev=d.state; d.state=st; acked.delete(d.id+':th');
+  if(!d.alert)return;
+  if(st!=='ok')log('crit',`${d.name} is ${st==='high'?'above':'below'} its ${st} limit: ${fmtV(d)} ${unit(d)} (limit ${st==='high'?d.hi:d.lo})`);
+  else log('ok',`${d.name} is back within limits: ${fmtV(d)} ${unit(d)}`);
+}
+function tick(){
+  sensors().forEach(d=>{
+    if(d.joining){d.joining--;if(!d.joining){d.online=true;d.value=d.base;d.lastSeen=Date.now();log('ok',`${d.name} ${d.net==='lora'?'joined the LoRaWAN network':'connected'} and sent its first reading`);toast(`${d.name} is online`)} return}
+    if(!d.online)return;
+    step(d); d.lastSeen=Date.now(); checkState(d);
+  });
+  devices.forEach(d=>{
+    if(d.cfg&&d.online){d.cfg.ticks--;if(d.cfg.ticks<=0){d.cfg=null;log('ok',`Settings applied on ${d.name}${d.interval&&d.kind==='sensor'?' (reporting every '+d.interval+')':''}`);toast(`Settings applied on ${d.name}`);if(panelId===d.id){const s=$('#p-cfgst');if(s)s.textContent='Applied'}}}
+    if(d.ota){d.ota.p=Math.min(100,d.ota.p+d.ota.rate*(.7+Math.random()*.6));if(d.ota.p>=100){d.fw=d.ota.to;d.ota=null;log('ok',`Firmware ${d.fw} installed on ${d.name}. Device restarted.`);toast(`${d.name} updated to ${d.fw}`);if(panelId===d.id)openPanel(d.id)}}
+    if(d.kind==='gateway')d._j=Math.round(randn()*3);
+  });
+  evalRules();
+  if(Math.random()<.35)camEvent();
+  const on=sensors().filter(d=>d.online).length; msgsPerMin=on*30+Math.round(randn()*4)+ (camEvents.length?6:0);
+  renderAll(); updPanel();
+}
+function renderAll(){
+  $('#clock').textContent=tfmt(Date.now());
+  if(tab==='overview')renderOverview();
+  if(tab==='devices')updDevTable();
+  if(tab==='rules'){updThTable();renderRules()}
+  if(tab==='camera')renderCamera();
+  if(tab==='api')renderApi();
+  const un=activeAlarms().filter(a=>!acked.has(a.key)).length, cnt=$('#cnt-alarms'); cnt.textContent=un; cnt.toggleAttribute('data-zero',!un);
+}
+// theme change → redraw canvases
+try{matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>renderAll())}catch(e){}
+new MutationObserver(()=>renderAll()).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+window.addEventListener('resize',()=>{if(tab==='overview')drawMain();if(tab==='devices')updDevTable()});
+
+fillSelects(); buildDevTable(); buildThTable(); buildCams(); renderRules();
+const h=(location.hash||'').slice(1); msgsPerMin=sensors().filter(d=>d.online).length*30;
+showTab(['overview','devices','rules','camera','api'].includes(h)?h:'overview');
+setInterval(tick,TICK); requestAnimationFrame(anim);
+})();
+function toast(msg){const t=document.createElement('div');t.className='toast';t.textContent=msg;document.getElementById('toasts').appendChild(t);const all=document.querySelectorAll('.toast');if(all.length>3)all[0].remove();setTimeout(()=>t.remove(),3800)}
+</script>
